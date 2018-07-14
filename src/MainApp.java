@@ -20,8 +20,8 @@ public class MainApp extends PApplet {
     }
 
     public void settings(){
-        size(800, 800, P2D);
-//        fullScreen(P2D, 1);
+//        size(800, 800, P2D);
+        fullScreen(P2D, 1);
     }
 
     ControlP5 cp5;
@@ -35,6 +35,11 @@ public class MainApp extends PApplet {
     float fluid_temp_value = 0;
     float fluid_density_r = 5;
     float fluid_density_intensity = 5;
+    float fft_clamp = 20;
+    float fft_mult = 20;
+
+    float hueStart = .6f;
+    float hueEnd = 1.f;
 
     Minim m;
     AudioInput in;
@@ -53,6 +58,7 @@ public class MainApp extends PApplet {
         m = new Minim(this);
         in = m.getLineIn();
         fft = new FFT(in.mix.size(), in.sampleRate());
+        fft.linAverages( fft.specSize()/spawnCount);
         bd = new BeatDetect();
 
         // library context
@@ -61,45 +67,40 @@ public class MainApp extends PApplet {
         // fluid simulation
         fluid = new DwFluid2D(context, width, height, 2);
 
-
         // adding data to the fluid simulation
         fluid.addCallback_FluiData(new  DwFluid2D.FluidData() {
             public void update(DwFluid2D fluid) {
                 float highest = 0;
                 float lowest = 0;
-                float bandClamp = 20;
-
                 for(int i = 0; i < fft.specSize(); i+=spawnCount){
-
                     float px  = map(i, 0,  fft.specSize(), 0, width);
-                    float py = height/8;
+                    float py = height/12;
                     float distanceFromMiddle = getAbs(width / 2 - px);
                     int fftIndex = round(map(distanceFromMiddle, 0, width/2, 0, fft.specSize()));
-                    float band = fft.getBand(fftIndex)*30;
+                    float fft_val = fft.getBand(fftIndex)*fft_mult;
 
-                    if(band > bandClamp){
-                        band = bandClamp;
+                    if(fft_val > fft_clamp){
+                        fft_val = fft_clamp;
                     }
-                    if(band < lowest){
-                        lowest = band;
+                    if(fft_val < lowest){
+                        lowest = fft_val;
                     }
-                    if(band > highest){
-                        highest = band;
+                    if(fft_val > highest){
+                        highest = fft_val;
                     }
-
 
                     float vx = 0;
-                    float vy = band*velocityMultiplier;
+                    float vy = fft_val*velocityMultiplier;
 
-                    float n = map(band, 0, bandClamp, 0, 1);
+                    float n = map(fft_val, 0, fft_clamp, hueStart, hueEnd);
                     int hsb = color(n,1,1);
 
-                    float r = (hsb >> 16 & 0xFF) /255;
-                    float g = (hsb >> 8 & 0xFF)  /255;
-                    float b = (hsb & 0xFF)       /255;
+                    float r = (hsb >> 16 & 0xFF)/255f;
+                    float g = (hsb >> 8 & 0xFF) /255f;
+                    float b = (hsb & 0xFF)      /255f;
 
-                    if(band > bandClamp/3){
-                        fluid.addTemperature(px,py, band*fluid_temp_r, band*fluid_temp_value);
+                    if(fft_val > fft_clamp/3){
+                        fluid.addTemperature(px,py, fft_val*fluid_temp_r, fft_val*fluid_temp_value);
                         fluid.addDensity(px, py, fluid_density_r,r,g,b, fluid_density_intensity);
                         fluid.addVelocity(px, py, 5, vx, vy);
                     }
@@ -130,7 +131,7 @@ public class MainApp extends PApplet {
         pg_fluid.background(0);
         pg_fluid.endDraw();
 
-        int mode = round(cp5.get("mode").getValue());
+        int mode = round(cp5.get("modeRadio").getValue());
 
 
         // render fluid stuff
@@ -148,7 +149,10 @@ public class MainApp extends PApplet {
         fluid_density_intensity = cp5.getController("density_intensity").getValue();
         fluid_temp_r = cp5.getController("fluid_temp_r").getValue();
         fluid_temp_value = cp5.getController("fluid_temp_value").getValue();
-
+        fft_mult = cp5.getController("fft_mult").getValue();
+        fft_clamp = cp5.getController("fft_clamp").getValue();
+        hueStart = cp5.getController("hue_start").getValue();
+        hueEnd = cp5.getController("hue_end").getValue();
     }
 
     void gui() {
@@ -158,20 +162,23 @@ public class MainApp extends PApplet {
         // group number 3, contains a bang and a slider
         Group g1 = cp5.addGroup("audio reactive")
                 .setBackgroundColor(color(50, 64))
-                .setBackgroundHeight(150)
+                .setBackgroundHeight(230)
                 ;
 
         Group g2 = cp5.addGroup("general properties")
                 .setBackgroundColor(color(50, 64))
-                .setBackgroundHeight(150)
+                .setBackgroundHeight(125)
                 ;
 
         Group g3 = cp5.addGroup("mode")
                 .setBackgroundColor(color(50, 64))
-                .setBackgroundHeight(150)
+                .setBackgroundHeight(110)
                 ;
 
-
+        Group g4 = cp5.addGroup("hue")
+                .setBackgroundColor(color(50, 64))
+                .setBackgroundHeight(150)
+                ;
         float yOff = 25;
         float y = -yOff/2;
         int barW = 100;
@@ -180,22 +187,29 @@ public class MainApp extends PApplet {
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
                 .setRange(1,20)
-                .setValue(4)
+                .setValue(13)
+                .moveTo(g1)
+        ;
+        cp5.addBang("reset")
+                .setPosition(barW*2, y)
+                .setSize( 20, 20)
+                .setTriggerEvent(Bang.RELEASE)
+                .setLabel("reset")
+                .plugTo(this,"reset")
                 .moveTo(g1)
         ;
         cp5.addSlider("density_intensity")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
-                .setRange(0,3)
-                .setValue(1)
+                .setRange(0,10)
+                .setValue(3)
                 .moveTo(g1)
         ;
-
         cp5.addSlider("speed_multiplier")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
-                .setRange(0,100)
-                .setValue(4)
+                .setRange(-50,50)
+                .setValue(2)
                 .moveTo(g1)
         ;
 
@@ -214,34 +228,44 @@ public class MainApp extends PApplet {
                 .setValue(0)
                 .moveTo(g1)
         ;
+        cp5.addSlider("fft_mult")
+                .setPosition(0,y+=yOff)
+                .setSize(barW,20)
+                .setRange(1,1000)
+                .setValue(40)
+                .moveTo(g1)
+        ;
+        cp5.addSlider("fft_clamp")
+                .setPosition(0,y+=yOff)
+                .setSize(barW,20)
+                .setRange(1,1000)
+                .setValue(1000)
+                .moveTo(g1)
+        ;
 
         y = -yOff/2;
 
         cp5.addSlider("vorticity")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
-                .setRange(0,20)
+                .setRange(0,5)
                 .setValue(.99f)
                 .moveTo(g2)
         ;
-
-
         cp5.addSlider("dissipation_velocity")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
-                .setRange(0,2)
+                .setRange(0,1.2f)
                 .setValue(.7f)
                 .moveTo(g2)
         ;
-
         cp5.addSlider("dissipation_density")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
-                .setRange(0,2)
+                .setRange(0,1.2f)
                 .setValue(.8f)
                 .moveTo(g2)
         ;
-
         cp5.addSlider("spawn_count")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
@@ -249,10 +273,8 @@ public class MainApp extends PApplet {
                 .setValue(4)
                 .moveTo(g2)
         ;
-
         y = -yOff/2;
-
-        cp5.addRadio("mode")
+        cp5.addRadio("modeRadio")
                 .setPosition(0, y+=yOff)
                 .setSize(barW, 20)
                 .addItem("density", 0)
@@ -261,15 +283,21 @@ public class MainApp extends PApplet {
                 .addItem("velocity", 3)
                 .activate(0)
                 .moveTo(g3);
-
-        cp5.addBang("reset")
-                .setPosition(0, y+=yOff+80)
-                .setSize( barW, 20)
-                .setTriggerEvent(Bang.RELEASE)
-                .setLabel("reset")
-                .plugTo(this,"reset")
-                .moveTo(g3);
-
+        y = -yOff/2;
+        cp5.addSlider("hue_start")
+                .setPosition(0,y+=yOff)
+                .setSize(barW,20)
+                .setRange(0,1)
+                .setValue(.90f)
+                .moveTo(g4)
+        ;
+        cp5.addSlider("hue_end")
+                .setPosition(0,y+=yOff)
+                .setSize(barW,20)
+                .setRange(0,1)
+                .setValue(.58f)
+                .moveTo(g4)
+        ;
         // create a new accordion
         // add g1 to the accordion.
         accordion = cp5.addAccordion("acc")
@@ -278,6 +306,7 @@ public class MainApp extends PApplet {
                 .addItem(g1)
                 .addItem(g2)
                 .addItem(g3)
+                .addItem(g4)
         ;
 
         cp5.mapKeyFor(new ControlKey() {public void keyEvent() {accordion.open(0,1,2);}}, 'o');
@@ -292,6 +321,7 @@ public class MainApp extends PApplet {
         accordion.open(0);
         accordion.open(1);
         accordion.open(2);
+        accordion.open(3);
 
         // use Accordion.MULTI to allow multiple group
         // to be open at a time.
