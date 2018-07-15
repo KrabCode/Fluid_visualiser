@@ -37,6 +37,7 @@ public class MainApp extends PApplet {
     float fluid_density_intensity = 5;
     float fft_clamp = 20;
     float fft_mult = 20;
+    float binary_clamp = 7;
 
     float hueStart = .6f;
     float hueEnd = 1.f;
@@ -72,12 +73,12 @@ public class MainApp extends PApplet {
             public void update(DwFluid2D fluid) {
                 float highest = 0;
                 float lowest = 0;
-                for(int i = 0; i < fft.specSize(); i+=spawnCount){
-                    float px  = map(i, 0,  fft.specSize(), 0, width);
+                for(int i = 0; i < fft.avgSize(); i+=spawnCount){
+                    float px  = map(i, 0,  fft.avgSize(), 0, width);
                     float py = height/12;
                     float distanceFromMiddle = getAbs(width / 2 - px);
-                    int fftIndex = round(map(distanceFromMiddle, 0, width/2, 0, fft.specSize()));
-                    float fft_val = fft.getBand(fftIndex)*fft_mult;
+                    int fftIndex = round(map(distanceFromMiddle, 0, width/2, 0, fft.avgSize()-2));
+                    float fft_val = log( 2000 * fft.getAvg(fftIndex) / fft.timeSize() )*fft_mult;
 
                     if(fft_val > fft_clamp){
                         fft_val = fft_clamp;
@@ -99,13 +100,12 @@ public class MainApp extends PApplet {
                     float g = (hsb >> 8 & 0xFF) /255f;
                     float b = (hsb & 0xFF)      /255f;
 
-                    if(fft_val > fft_clamp/3){
+                    if(fft_val > binary_clamp){
                         fluid.addTemperature(px,py, fft_val*fluid_temp_r, fft_val*fluid_temp_value);
                         fluid.addDensity(px, py, fluid_density_r,r,g,b, fluid_density_intensity);
                         fluid.addVelocity(px, py, 5, vx, vy);
                     }
                 }
-//                println(lowest+":"+highest);
             }
         });
 
@@ -208,7 +208,7 @@ public class MainApp extends PApplet {
         cp5.addSlider("speed_multiplier")
                 .setPosition(0,y+=yOff)
                 .setSize(barW,20)
-                .setRange(-50,50)
+                .setRange(-5,5)
                 .setValue(2)
                 .moveTo(g1)
         ;
@@ -240,6 +240,13 @@ public class MainApp extends PApplet {
                 .setSize(barW,20)
                 .setRange(1,1000)
                 .setValue(1000)
+                .moveTo(g1)
+        ;
+        cp5.addSlider("binary_clamp")
+                .setPosition(0,y+=yOff)
+                .setSize(barW,20)
+                .setRange(1,250)
+                .setValue(7)
                 .moveTo(g1)
         ;
 
