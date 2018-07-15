@@ -341,5 +341,6 @@ public class MainApp extends PApplet {
 
     public void reset(){
         fluid.reset();
+        gui();
     }
 }
